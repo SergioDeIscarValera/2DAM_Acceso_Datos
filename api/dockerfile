@@ -1,0 +1,27 @@
+# Use the official Python base image
+FROM python:alpine3.19
+
+# Install the mariadb-connector-c-dev package
+RUN apk add --no-cache mariadb-connector-c-dev gcc musl-dev
+
+# Set the working directory in the container
+WORKDIR /usr/src/app
+
+# Copy the requirements file to the container
+COPY requirements.txt .
+
+# Install the Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt && \
+    pip install --no-cache-dir 'flask[async]'
+
+# Copy the application code to the container
+COPY src ./src
+
+# Set environment variables 
+ENV PYTHONPATH "/usr/src/app/src:${PYTHONPATH}"
+
+# Expose the port on which the application will run
+EXPOSE 5000
+
+# Run the application
+CMD [ "flask", "--app=app.py", "run", "--host=0.0.0.0" ]

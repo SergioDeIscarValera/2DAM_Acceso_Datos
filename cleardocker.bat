@@ -1,0 +1,1 @@
+docker compose stop && docker compose rm -f && docker rmi 2dam_acceso_datos-api:latest && docker compose up -d --force-recreate
