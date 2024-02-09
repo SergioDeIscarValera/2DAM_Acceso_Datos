@@ -9,23 +9,35 @@ from flask import Flask, jsonify, request, abort
 from pymongo.errors import PyMongoError
 from bson import ObjectId
 
+import os
+from dotenv import dotenv_values
+
+# Load environment variables
+env = dotenv_values()
+# Create a Flask app
 app = Flask(__name__)
 app.config["JSONIFY_PRETTYPRINT_REGULAR"] = True
-# task_repo = TaskRepositoryMongo("tasks")
-task_repo = TaskRepositoryMaria("tasks")
 
-now = str(datetime.datetime.now())
-new_task = Task(title="Tarea otro", description="Descripción de la tarea otro", done=False, end_date=now, id = "3048886b-d46e-4f4b-af89-266a397df806")
-saved_task = task_repo.save(new_task, "postman", new_task.id)
-
-if saved_task is not None:
-    print(f"Task saved successfully: {saved_task}")
-else:
-    print("Failed to save task")
+DB_TYPE = env["DB_TYPE"]
+print(f"DB_TYPE: {DB_TYPE}")
+if DB_TYPE == "mongodb":
+    task_repo = TaskRepositoryMongo("tasks")
+elif DB_TYPE == "mariadb":
+    task_repo = TaskRepositoryMaria("tasks")
 
 @app.route('/')
 def index():
-    response = {'message': 'success'}
+    response = {
+        'urls': [
+            {'/': 'Index'},
+            {'/tasks': 'Get all tasks'},
+            {'/tasks/<id>': 'Get task by id'},
+            {'/tasks': 'Create a task'},
+            {'/tasks/<id>': 'Update a task'},
+            {'/tasks/<id>': 'Delete a task'}
+        ],
+        'db_type': f'{DB_TYPE}'
+    }
     return jsonify(response)
 
 @app.route('/tasks', methods=['GET'])

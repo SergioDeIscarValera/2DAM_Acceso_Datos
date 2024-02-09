@@ -3,19 +3,11 @@ from abc import abstractmethod
 from src.repositories.repository_abc import RepositoryABC
 from src.models.task import Task
 from mariadb import mariadb
-import os
 
 class TaskRepositoryMaria(RepositoryABC[Task, str, str]):
 
     def __init__(self, table: str):
         self.table = table
-        hostname = "mariadb"
-        response = os.system("ping -c 1 " + hostname)
-
-        if response == 0:
-            print(f"{hostname} is up!")
-        else:
-            print(f"{hostname} is down!")
         print("Connecting to MariaDB...")
         try:
             self.conn = mariadb.connect(

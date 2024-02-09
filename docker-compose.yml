@@ -2,6 +2,7 @@ version: '3.7'
 services:
   mongodb:
     image: mongo:6.0.13-jammy
+    restart: always
     ports:
       - 27017:27017
     environment:
@@ -12,6 +13,7 @@ services:
       - ./data:/data/db
   mariadb:
     image: mariadb:lts-jammy
+    restart: always
     ports:
       - 3306:3306
     environment:
