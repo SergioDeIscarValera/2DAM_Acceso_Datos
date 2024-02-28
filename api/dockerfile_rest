@@ -23,7 +23,7 @@ COPY src ./src
 ENV PYTHONPATH "/usr/src/app/src:${PYTHONPATH}"
 
 # Expose the port on which the application will run
-EXPOSE 5000
+EXPOSE 5001
 
 # Run the application
-CMD [ "flask", "--app=app.py", "run", "--host=0.0.0.0" ]
+CMD [ "flask", "--app=app_flask.py", "run", "--host=0.0.0.0" ]

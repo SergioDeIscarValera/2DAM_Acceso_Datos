@@ -6,7 +6,6 @@ ID = TypeVar('ID')
 IDC = TypeVar('IDC')
 
 class RepositoryABC(ABC, Generic[T, ID, IDC]):
-
     @abstractmethod
     async def find_all(self, idc: IDC) -> Awaitable[Iterable[T]]:
         pass

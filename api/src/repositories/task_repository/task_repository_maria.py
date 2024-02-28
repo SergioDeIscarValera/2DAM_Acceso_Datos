@@ -3,9 +3,9 @@ from abc import abstractmethod
 from src.repositories.repository_abc import RepositoryABC
 from src.models.task import Task
 from mariadb import mariadb
+import datetime
 
 class TaskRepositoryMaria(RepositoryABC[Task, str, str]):
-
     def __init__(self, table: str):
         self.table = table
         print("Connecting to MariaDB...")
@@ -24,33 +24,35 @@ class TaskRepositoryMaria(RepositoryABC[Task, str, str]):
             print(f"Error connecting to MariaDB: {e}")  
 
     def create_table_if_not_exists(self) -> None:
-        self.cursor.execute(f"CREATE TABLE IF NOT EXISTS {self.table} (id VARCHAR(36) PRIMARY KEY, idc VARCHAR(36), title VARCHAR(255), description TEXT, done BOOLEAN, end_date DATETIME)")
+        self.cursor.execute(f"CREATE TABLE IF NOT EXISTS {self.table} (id VARCHAR(36) PRIMARY KEY, idc VARCHAR(36), title VARCHAR(255), description TEXT, done BOOLEAN, end_date DATETIME, is_important BOOLEAN, create_date DATETIME DEFAULT CURRENT_TIMESTAMP, update_date DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)")
         self.conn.commit()
 
     async def find_all(self, idc: str) -> Iterable[Task]:
         self.cursor.execute(f"SELECT * FROM {self.table} WHERE idc = '{idc}'")
-        tasks = [Task(title=task[2], description=task[3], done=task[4], end_date=task[5], id=task[0]) for task in self.cursor]
+        tasks = [Task(title=task[2], description=task[3], done=task[4], end_date=task[5], is_important=task[6], create_date=task[7], update_date=task[8], id=task[0]) for task in self.cursor]
         return tasks
 
     async def find_by_id(self, id: str, idc: str) -> Optional[Task]:
         self.cursor.execute(f"SELECT * FROM {self.table} WHERE id = '{id}' AND idc = '{idc}'")
         task = self.cursor.fetchone()
         if task is not None:
-            return Task(title=task[2], description=task[3], done=task[4], end_date=task[5], id=task[0])
+            return Task(title=task[2], description=task[3], done=task[4], end_date=task[5], is_important=task[6], create_date=task[7], update_date=task[8], id=task[0])
         else:
             return None
 
     def save(self, t: Task, idc: str, id: str) -> Optional[Task]:
-        # Implementación de la lógica para guardar un registro
         if self.exists_by_id(id, idc):
-            update_data = (t.title, t.description, t.done, t.end_date, id, idc)
-            self.cursor.execute(f"UPDATE {self.table} SET title = ?, description = ?, done = ?, end_date = ? WHERE id = ? AND idc = ?", update_data)
+            t.update_date = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
+            update_data = (t.title, t.description, t.done, t.end_date, t.is_important, t.update_date, id, idc)
+            self.cursor.execute(f"UPDATE {self.table} SET title = ?, description = ?, done = ?, end_date = ? is_important = ?, update_date = ? WHERE id = ? AND idc = ?", update_data)
             self.conn.commit()
             if self.cursor.rowcount > 0:
                 return t
         else:
-            insert_data = (id, idc, t.title, t.description, t.done, t.end_date)
-            self.cursor.execute(f"INSERT INTO {self.table} (id, idc, title, description, done, end_date) VALUES (?, ?, ?, ?, ?, ?)", insert_data)
+            t.create_date = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
+            t.update_date = t.create_date
+            insert_data = (id, idc, t.title, t.description, t.done, t.end_date, t.is_important, t.create_date, t.update_date)
+            self.cursor.execute(f"INSERT INTO {self.table} (id, idc, title, description, done, end_date, is_important, create_date, update_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", insert_data)
             self.conn.commit()
             if self.cursor.rowcount > 0:
                 return t

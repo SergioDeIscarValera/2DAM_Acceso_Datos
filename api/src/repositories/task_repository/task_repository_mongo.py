@@ -3,34 +3,37 @@ from abc import abstractmethod
 from src.repositories.repository_abc import RepositoryABC
 from src.models.task import Task
 from pymongo import MongoClient
+import datetime
 
 class TaskRepositoryMongo(RepositoryABC[Task, str, str]):
-    
     def __init__(self, collection: str):
         self.collection = collection
         print("Connecting to MongoDB...")
         client = MongoClient("mongodb://root:example@mongodb:27017/")
+
         self.db = client.testdb
         self.task_collection = self.db[self.collection]
 
         try: self.db.command("serverStatus")
         except Exception as e: print(e)
-        else: print("Connected to MongoDB!")  
+        else: print("Connected to MongoDB tasks!")  
 
     async def find_all(self, idc: str) -> Iterable[Task]:
         cursor = self.task_collection.find({"idc": idc})
-        tasks = [Task(title=task.get('title', ''), description=task.get('description', ''), done=task.get('done', False), end_date=task.get('end_date', ''), id=task.get('id', '')) for task in cursor]
+        tasks = [Task(title=task.get('title', ''), description=task.get('description', ''), done=task.get('done', False), is_important=task.get('is_important', False), end_date=task.get('end_date', ''), id=task.get('id', '')) for task in cursor]
         return tasks
 
     async def find_by_id(self, id: str, idc: str) -> Optional[Task]:
         cursor = self.task_collection.find_one({"id": id, "idc": idc})
-        task = Task(title=cursor.get('title', ''), description=cursor.get('description', ''), done=cursor.get('done', False), end_date=cursor.get('end_date', ''), id=cursor.get('id', ''))
+        if cursor is None:
+            return None
+        task = Task(title=cursor.get('title', ''), description=cursor.get('description', ''), done=cursor.get('done', False), is_important=task.get('is_important', False), end_date=cursor.get('end_date', ''), id=cursor.get('id', ''))
         return task
 
     def save(self, t: Task, idc: str, id: str) -> Optional[Task]:
-        # Implementación de la lógica para guardar un registro
         if self.exists_by_id(id, idc):
             filter_query = {"idc": idc, "id": id}
+            t.update_date = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
             update_data = {"$set": t.__dict__}  # Utilizamos el diccionario de atributos de la instancia Task
 
             # Actualizar el documento existente
@@ -47,10 +50,8 @@ class TaskRepositoryMongo(RepositoryABC[Task, str, str]):
             document_data = t.__dict__
             document_data["idc"] = idc
 
-            # Insertar un nuevo documento
             result = self.task_collection.insert_one(document_data)
 
-            # Verificar si se insertó con éxito
             if result.inserted_id:
                 return t
 
