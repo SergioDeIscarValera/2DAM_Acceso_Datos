@@ -1,6 +1,6 @@
 from src.repositories.task_repository.task_repository_mongo import TaskRepositoryMongo
 from src.repositories.task_repository.task_repository_maria import TaskRepositoryMaria
-from src.repositories.task_repository.user_repository_mongo import UserRepositoryMongo
+from src.repositories.user_repository.user_repository_mongo import UserRepositoryMongo
 from src.models.task import Task
 from src.models.user import User
 from src.utils.mongo_validators import MongoValidators
@@ -20,10 +20,13 @@ app.config["JSONIFY_PRETTYPRINT_REGULAR"] = True
 
 DB_TYPE = env["DB_TYPE"]
 print(f"DB_TYPE: {DB_TYPE}")
-user_repo = UserRepositoryMongo("users")
+
+mongo_validators = MongoValidators()
+mongo_validators.apply_user_mongo_shema("my_users")
+user_repo = UserRepositoryMongo("my_users")
 if DB_TYPE == "mongodb":
     task_repo = TaskRepositoryMongo("tasks")
-    #MongoValidators.apply_task_mongo_shema("tasks")
+    mongo_validators.apply_task_mongo_shema("tasks")
 elif DB_TYPE == "mariadb":
     task_repo = TaskRepositoryMaria("tasks")
 
@@ -32,28 +35,35 @@ def index():
     response = {
         'urls': [
             {'/': 'Index'},
-            {'/tasks?idc=<email>': 'Get all tasks (GET)'},
-            {'/tasks/<id>?idc=<email>': 'Get task by id (GET)'},
-            {'/tasks?idc=<email>': 'Create a task (POST)'},
-            {'/tasks/<id>?idc=<email>': 'Update a task (PUT)'},
-            {'/tasks/<id>?idc=<email>': 'Delete a task (DELETE)'},
+            {'/tasks': 'Get all tasks (GET)'},
+            {'/tasks/<id>': 'Get task by id (GET)'},
+            {'/tasks': 'Create a task (POST)'},
+            {'/tasks/<id>': 'Update a task (PUT)'},
+            {'/tasks/<id>': 'Delete a task (DELETE)'},
 
             {'/users/<email>?pass=<password>': 'Get user by email and password (GET)'},
             {'/users': 'Create a user (POST)'},
             {'/users/<email>?pass=<password>': 'Update a user (PUT)'},
             {'/users/<email>?pass=<password>': 'Delete a user (DELETE)'}
         ],
-        'db_type': f'{DB_TYPE}'
+        'db_type': f'{DB_TYPE}',
+        'note': "For /tasks and /tasks/<id> endpoints, you must provide 'email' and 'pass' headers with the user credentials."
     }
     return jsonify(response)
+
 #region Tasks
 @app.route('/tasks', methods=['GET'])
 async def get_tasks():
     try:
-        idc = request.args.get('idc')  # Obtener el parámetro 'idc' de la consulta
+        idc = request.headers.get('email') # Obtener el parámetro 'idc' del header
+        passw = request.headers.get('pass')  # Obtener el parámetro 'pass' de la consulta
+        if passw is None or idc is None:
+            return jsonify({"message": "No credentials provided"})
+        if (await user_repo.validate_user(idc, passw)) == False:
+            return jsonify({"message": "Invalid credentials"})
         tasks = await task_repo.find_all(idc)
         if not tasks:
-            return jsonify({"message": "[]"})
+            return jsonify({"message": "No tasks found"})
         serialized_tasks = [task.__dict__ for task in tasks]
         return jsonify(serialized_tasks)
     except PyMongoError as e:
@@ -62,7 +72,12 @@ async def get_tasks():
 @app.route('/tasks/<id>', methods=['GET'])
 async def get_task(id):
     try:
-        idc = request.args.get('idc')  # Obtener el parámetro 'idc' de la consulta
+        idc = request.headers.get('email') # Obtener el parámetro 'idc' del header
+        passw = request.headers.get('pass')  # Obtener el parámetro 'pass' de la consulta
+        if passw is None or idc is None:
+            return jsonify({"message": "No credentials provided"})
+        if (await user_repo.validate_user(idc, passw)) == False:
+            return jsonify({"message": "Invalid credentials"})
         task = await task_repo.find_by_id(id, idc)
         if task is None:
             return jsonify({"message": "Task not found"})
@@ -72,31 +87,46 @@ async def get_task(id):
         return jsonify({"Error": f"{e}"})
 
 @app.route('/tasks', methods=['POST'])
-def create_task():
+async def create_task():
     try:
-        idc = request.args.get('idc')  # Obtener el parámetro 'idc' de la consulta
+        idc = request.headers.get('email') # Obtener el parámetro 'idc' del header
+        passw = request.headers.get('pass')  # Obtener el parámetro 'pass' de la consulta
+        if passw is None or idc is None:
+            return jsonify({"message": "No credentials provided"})
+        if (await user_repo.validate_user(idc, passw)) == False:
+            return jsonify({"message": "Invalid credentials"})
         data = request.get_json()
-        return _save_task(idc, data)
+        return await _save_task(idc, data)
     except PyMongoError as e:
         return jsonify({"Error": f"{e}"})
     except KeyError as e:
         abort(400, description=f"Missing key: {e}")
 
 @app.route('/tasks/<id>', methods=['PUT'])
-def update_task(id):
+async def update_task(id):
     try:
-        idc = request.args.get('idc')  # Obtener el parámetro 'idc' de la consulta
+        idc = request.headers.get('email') # Obtener el parámetro 'idc' del header
+        passw = request.headers.get('pass')  # Obtener el parámetro 'pass' de la consulta
+        if passw is None or idc is None:
+            return jsonify({"message": "No credentials provided"})
+        if (await user_repo.validate_user(idc, passw)) == False:
+            return jsonify({"message": "Invalid credentials"})
         data = request.get_json()
-        return _save_task(idc, data, id)
+        return await _save_task(idc, data, id)
     except PyMongoError as e:
         return jsonify({"Error": f"{e}"})
     except KeyError as e:
         abort(400, description=f"Missing key: {e}")
 
 @app.route('/tasks/<id>', methods=['DELETE'])
-def delete_task(id):
+async def delete_task(id):
     try:
-        idc = request.args.get('idc')  # Obtener el parámetro 'idc' de la consulta
+        idc = request.headers.get('email')  # Obtener el parámetro 'idc' de la consulta
+        passw = request.headers.get('pass')  # Obtener el parámetro 'pass' de la consulta
+        if passw is None or idc is None:
+            return jsonify({"message": "No credentials provided"})
+        if (await user_repo.validate_user(idc, passw)) == False:
+            return jsonify({"message": "Invalid credentials"})
         task_repo.delete_by_id(id, idc)
         return jsonify({"message": "Task deleted successfully"})
         return jsonify(serialized_task)
@@ -144,10 +174,10 @@ async def update_user(email):
         return jsonify({"Error": f"{e}"})
 
 @app.route('/users/<email>', methods=['DELETE'])
-def delete_user(email):
+async def delete_user(email):
     try:
         passw = request.args.get('pass')  # Obtener el parámetro 'pass' de la consulta
-        get_user = user_repo.find_by_id(email, email)
+        get_user = await user_repo.find_by_id(email, email)
         if get_user is None:
             return jsonify({"message": "User not found"})
         elif get_user.password != passw:
@@ -162,9 +192,9 @@ def delete_user(email):
 if __name__ == '__main__':
     asyncio.run(debug=True)
 
-def _save_task(idc, data, id = None):
-    new_task = Task(title=data['title'], description=data['description'], done=data['done'], end_date=data['end_date'], id = id)
-    saved_task = task_repo.save(new_task, idc, new_task.id)
+async def _save_task(idc, data, id = None):
+    new_task = Task(title=data['title'], description=data['description'], done=data['done'], end_date=data['end_date'], is_important=data['is_important'], id = id)
+    saved_task = await task_repo.save(new_task, idc, new_task.id)
 
     if saved_task is None:
         return jsonify({"message": "Failed to save task"})

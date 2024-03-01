@@ -1,11 +1,11 @@
 from typing import Iterable, Optional
 from abc import abstractmethod
-from src.repositories.repository_abc import RepositoryABC
+from src.repositories.user_repository.user_repository_abc import UserRepositoryABC
 from src.models.user import User
 from pymongo import MongoClient
 import datetime
 
-class UserRepositoryMongo(RepositoryABC[User, str, str]):
+class UserRepositoryMongo(UserRepositoryABC):
     def __init__(self, collection: str):
         self.collection = collection
         print("Connecting to MongoDB...")
@@ -36,27 +36,41 @@ class UserRepositoryMongo(RepositoryABC[User, str, str]):
 
     async def save(self, t: User, idc: str, id: str) -> Optional[User]:
         t.update_date = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
-        find = await self.find_by_id(idc, idc)
+        find = await self.find_by_id(id, idc)
         if find != None:
             t.create_date = find.create_date
-            filter_query = {"idc": idc, "email": id}           
-            update_data = {"$set": t.__dict__} 
+        
+        filter_query = {"idc": idc, "email": id}
+        update_data = {"$set": t.__dict__}
 
-            # Actualizar el documento existente
-            result = self.user_collection.update_one(filter_query, update_data)
-            print(f"Matched {result.matched_count} documents")
+        result = self.user_collection.update_one(filter_query, update_data, upsert=True)
 
-            # Verificar si se actualizó con éxito
-            if result.modified_count > 0:
-                return t
+        if result.matched_count > 0 or result.upserted_id:
+            return t
         else:
-            # Agregar el campo "idc" al documento
-            document_data = t.__dict__
-            document_data["idc"] = idc
+            return None
+        # t.update_date = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
+        # find = await self.find_by_id(idc, idc)
+        # if find != None:
+        #     t.create_date = find.create_date
+        #     filter_query = {"idc": idc, "email": id}           
+        #     update_data = {"$set": t.__dict__} 
 
-            result = self.user_collection.insert_one(document_data)
-            if result.inserted_id:
-                return t
+        #     # Actualizar el documento existente
+        #     result = self.user_collection.update_one(filter_query, update_data)
+        #     print(f"Matched {result.matched_count} documents")
+
+        #     # Verificar si se actualizó con éxito
+        #     if result.modified_count > 0:
+        #         return t
+        # else:
+        #     # Agregar el campo "idc" al documento
+        #     document_data = t.__dict__
+        #     document_data["idc"] = idc
+
+        #     result = self.user_collection.insert_one(document_data)
+        #     if result.inserted_id:
+        #         return t
 
     def delete_by_id(self, id: str, idc: str) -> None:
         self.user_collection.delete_one({"email": id, "idc": idc})
@@ -75,6 +89,12 @@ class UserRepositoryMongo(RepositoryABC[User, str, str]):
 
     async def count(self, idc: str) -> int:
         return await self.user_collection.count_documents({"idc": idc})
+
+    async def validate_user(self, email: str, password: str) -> bool:
+        user = await self.find_by_id(email, email)
+        if user is None:
+            return False
+        return user.password == password
 
     def close(self) -> None:
         self.db.close()

@@ -40,11 +40,13 @@ class TaskRepositoryMaria(RepositoryABC[Task, str, str]):
         else:
             return None
 
-    def save(self, t: Task, idc: str, id: str) -> Optional[Task]:
-        if self.exists_by_id(id, idc):
-            t.update_date = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
+    async def save(self, t: Task, idc: str, id: str) -> Optional[Task]:
+        t.update_date = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
+        find = await self.find_by_id(t.id, idc)
+        if find != None:
+            t.create_date = find.create_date
             update_data = (t.title, t.description, t.done, t.end_date, t.is_important, t.update_date, id, idc)
-            self.cursor.execute(f"UPDATE {self.table} SET title = ?, description = ?, done = ?, end_date = ? is_important = ?, update_date = ? WHERE id = ? AND idc = ?", update_data)
+            self.cursor.execute(f"UPDATE {self.table} SET title = ?, description = ?, done = ?, end_date = ?, is_important = ?, update_date = ? WHERE id = ? AND idc = ?", update_data)
             self.conn.commit()
             if self.cursor.rowcount > 0:
                 return t
