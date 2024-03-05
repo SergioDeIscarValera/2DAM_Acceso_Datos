@@ -27,12 +27,12 @@ class TaskRepositoryMaria(RepositoryABC[Task, str, str]):
         self.cursor.execute(f"CREATE TABLE IF NOT EXISTS {self.table} (id VARCHAR(36) PRIMARY KEY, idc VARCHAR(36), title VARCHAR(255), description TEXT, done BOOLEAN, end_date DATETIME, is_important BOOLEAN, create_date DATETIME DEFAULT CURRENT_TIMESTAMP, update_date DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)")
         self.conn.commit()
 
-    async def find_all(self, idc: str) -> Iterable[Task]:
+    def find_all(self, idc: str) -> Iterable[Task]:
         self.cursor.execute(f"SELECT * FROM {self.table} WHERE idc = '{idc}'")
         tasks = [Task(title=task[2], description=task[3], done=task[4], end_date=task[5], is_important=task[6], create_date=task[7], update_date=task[8], id=task[0]) for task in self.cursor]
         return tasks
 
-    async def find_by_id(self, id: str, idc: str) -> Optional[Task]:
+    def find_by_id(self, id: str, idc: str) -> Optional[Task]:
         self.cursor.execute(f"SELECT * FROM {self.table} WHERE id = '{id}' AND idc = '{idc}'")
         task = self.cursor.fetchone()
         if task is not None:
@@ -40,9 +40,9 @@ class TaskRepositoryMaria(RepositoryABC[Task, str, str]):
         else:
             return None
 
-    async def save(self, t: Task, idc: str, id: str) -> Optional[Task]:
+    def save(self, t: Task, idc: str, id: str) -> Optional[Task]:
         t.update_date = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
-        find = await self.find_by_id(t.id, idc)
+        find = self.find_by_id(t.id, idc)
         if find != None:
             t.create_date = find.create_date
             update_data = (t.title, t.description, t.done, t.end_date, t.is_important, t.update_date, id, idc)
@@ -77,7 +77,7 @@ class TaskRepositoryMaria(RepositoryABC[Task, str, str]):
     def exists(self, t: Task, idc: str) -> bool:
         return self.exists_by_id(t.id, idc)
 
-    async def count(self, idc: str) -> int:
+    def count(self, idc: str) -> int:
         self.cursor.execute(f"SELECT COUNT(*) FROM {self.table} WHERE idc = '{idc}'")
         return self.cursor.fetchone()[0]
 

@@ -53,15 +53,14 @@ class MongoValidators:
     def apply_user_mongo_shema(self, collection: str):
         schema = {
             "bsonType": "object",
-            "required": ["id", "name", "email", "password", "create_date", "update_date", "is_active"],
+            "required": ["id", "name", "email", "password", "create_date", "update_date",],
             "properties": {
                 "id": {"bsonType": "string", "pattern": self.id_regex},
                 "name": {"bsonType": "string", "maxLength": 50},
                 "email": {"bsonType": "string", "pattern": self.email_regex},
                 "password": {"bsonType": "string", "pattern": self.password_regex},
                 "create_date": {"bsonType": "string", "pattern": self.date_regex},
-                "update_date": {"bsonType": "string", "pattern": self.date_regex},
-                "is_active": {"bsonType": "bool"}
+                "update_date": {"bsonType": "string", "pattern": self.date_regex}
             }
         }
         self.apply_mongo_shema(schema, collection)

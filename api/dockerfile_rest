@@ -8,12 +8,12 @@ RUN apk add --no-cache mariadb-connector-c-dev gcc musl-dev
 WORKDIR /usr/src/app
 
 # Copy the requirements file to the container
-COPY requirements.txt .
+COPY requirements_rest.txt .
 
 COPY process.env ./src/.env
 
 # Install the Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt && \
+RUN pip install --no-cache-dir -r requirements_rest.txt && \
     pip install --no-cache-dir 'flask[async]'
 
 # Copy the application code to the container

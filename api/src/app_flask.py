@@ -3,6 +3,7 @@ from src.repositories.task_repository.task_repository_maria import TaskRepositor
 from src.repositories.user_repository.user_repository_mongo import UserRepositoryMongo
 from src.models.task import Task
 from src.models.user import User
+from src.services.email.email_service_smtplib import EmailServiceSmtplib
 from src.utils.mongo_validators import MongoValidators
 import datetime
 import asyncio
@@ -18,9 +19,12 @@ env = dotenv_values()
 app = Flask(__name__)
 app.config["JSONIFY_PRETTYPRINT_REGULAR"] = True
 
+# Set up the email service
+email_service = EmailServiceSmtplib(env)
+
 DB_TYPE = env["DB_TYPE"]
 print(f"DB_TYPE: {DB_TYPE}")
-
+# Set up the repositories
 mongo_validators = MongoValidators()
 mongo_validators.apply_user_mongo_shema("my_users")
 user_repo = UserRepositoryMongo("my_users")
@@ -53,15 +57,15 @@ def index():
 
 #region Tasks
 @app.route('/tasks', methods=['GET'])
-async def get_tasks():
+def get_tasks():
     try:
         idc = request.headers.get('email') # Obtener el parámetro 'idc' del header
         passw = request.headers.get('pass')  # Obtener el parámetro 'pass' de la consulta
         if passw is None or idc is None:
             return jsonify({"message": "No credentials provided"})
-        if (await user_repo.validate_user(idc, passw)) == False:
+        if user_repo.validate_user(idc, passw) == False:
             return jsonify({"message": "Invalid credentials"})
-        tasks = await task_repo.find_all(idc)
+        tasks = task_repo.find_all(idc)
         if not tasks:
             return jsonify({"message": "No tasks found"})
         serialized_tasks = [task.__dict__ for task in tasks]
@@ -70,15 +74,15 @@ async def get_tasks():
         return jsonify({"Error": f"{e}"})
 
 @app.route('/tasks/<id>', methods=['GET'])
-async def get_task(id):
+def get_task(id):
     try:
         idc = request.headers.get('email') # Obtener el parámetro 'idc' del header
         passw = request.headers.get('pass')  # Obtener el parámetro 'pass' de la consulta
         if passw is None or idc is None:
             return jsonify({"message": "No credentials provided"})
-        if (await user_repo.validate_user(idc, passw)) == False:
+        if user_repo.validate_user(idc, passw) == False:
             return jsonify({"message": "Invalid credentials"})
-        task = await task_repo.find_by_id(id, idc)
+        task = task_repo.find_by_id(id, idc)
         if task is None:
             return jsonify({"message": "Task not found"})
         serialized_task = task.__dict__
@@ -87,45 +91,45 @@ async def get_task(id):
         return jsonify({"Error": f"{e}"})
 
 @app.route('/tasks', methods=['POST'])
-async def create_task():
+def create_task():
     try:
         idc = request.headers.get('email') # Obtener el parámetro 'idc' del header
         passw = request.headers.get('pass')  # Obtener el parámetro 'pass' de la consulta
         if passw is None or idc is None:
             return jsonify({"message": "No credentials provided"})
-        if (await user_repo.validate_user(idc, passw)) == False:
+        if user_repo.validate_user(idc, passw) == False:
             return jsonify({"message": "Invalid credentials"})
         data = request.get_json()
-        return await _save_task(idc, data)
+        return _save_task(idc, data)
     except PyMongoError as e:
         return jsonify({"Error": f"{e}"})
     except KeyError as e:
         abort(400, description=f"Missing key: {e}")
 
 @app.route('/tasks/<id>', methods=['PUT'])
-async def update_task(id):
+def update_task(id):
     try:
         idc = request.headers.get('email') # Obtener el parámetro 'idc' del header
         passw = request.headers.get('pass')  # Obtener el parámetro 'pass' de la consulta
         if passw is None or idc is None:
             return jsonify({"message": "No credentials provided"})
-        if (await user_repo.validate_user(idc, passw)) == False:
+        if user_repo.validate_user(idc, passw) == False:
             return jsonify({"message": "Invalid credentials"})
         data = request.get_json()
-        return await _save_task(idc, data, id)
+        return _save_task(idc, data, id)
     except PyMongoError as e:
         return jsonify({"Error": f"{e}"})
     except KeyError as e:
         abort(400, description=f"Missing key: {e}")
 
 @app.route('/tasks/<id>', methods=['DELETE'])
-async def delete_task(id):
+def delete_task(id):
     try:
         idc = request.headers.get('email')  # Obtener el parámetro 'idc' de la consulta
         passw = request.headers.get('pass')  # Obtener el parámetro 'pass' de la consulta
         if passw is None or idc is None:
             return jsonify({"message": "No credentials provided"})
-        if (await user_repo.validate_user(idc, passw)) == False:
+        if user_repo.validate_user(idc, passw) == False:
             return jsonify({"message": "Invalid credentials"})
         task_repo.delete_by_id(id, idc)
         return jsonify({"message": "Task deleted successfully"})
@@ -136,15 +140,15 @@ async def delete_task(id):
 
 #region Users
 @app.route('/users/<email>', methods=['GET'])
-async def get_user(email):
+def get_user(email):
     try:
         passw = request.args.get('pass')  # Obtener el parámetro 'pass' de la consulta
-        user = await user_repo.find_by_id(email, email)
-        if user is None:
-            return jsonify({"message": "User not found"})
-        elif user.password != passw:
-            return jsonify({"message": "Invalid password"})
+        user = user_repo.find_by_id(email, email)
+        if user is None or user.password != passw:
+            return jsonify({"message": "Invalid user or password"})
         serialized_user = user.__dict__
+        if "verify_code" in serialized_user:
+            del serialized_user["verify_code"]
         return jsonify(serialized_user)
     except PyMongoError as e:
         return jsonify({"Error": f"{e}"})
@@ -164,26 +168,32 @@ async def update_user(email):
     try:
         passw = request.args.get('pass')  # Obtener el parámetro 'pass' de la consulta
         data = request.get_json()
-        get_user = await user_repo.find_by_id(email, email)
-        if get_user is None:
-            return jsonify({"message": "User not found"})
-        elif get_user.password != passw:
-            return jsonify({"message": "Invalid password"})
-        return await _save_user(email, data, email)
+        get_user = user_repo.find_by_id(email, email)
+        if get_user is None or get_user.password != passw:
+            return jsonify({"message": "Invalid user or password"})
+        return await _save_user(email, data, email, False)
     except PyMongoError as e:
         return jsonify({"Error": f"{e}"})
 
 @app.route('/users/<email>', methods=['DELETE'])
-async def delete_user(email):
+def delete_user(email):
     try:
         passw = request.args.get('pass')  # Obtener el parámetro 'pass' de la consulta
-        get_user = await user_repo.find_by_id(email, email)
-        if get_user is None:
-            return jsonify({"message": "User not found"})
-        elif get_user.password != passw:
-            return jsonify({"message": "Invalid password"})
+        get_user = user_repo.find_by_id(email, email)
+        if get_user is None or get_user.password != passw:
+            return jsonify({"message": "Invalid user or password"})
         user_repo.delete_by_id(email, email)
         return jsonify({"message": "User deleted successfully"})
+    except PyMongoError as e:
+        return jsonify({"Error": f"{e}"})
+
+@app.route('/users/verify/<email>', methods=['GET'])
+def verify_user(email):
+    try:
+        code = request.args.get('code')  # Obtener el parámetro 'code' de la consulta
+        if user_repo.verify_user(email, code) == False:
+            return jsonify({"message": "Invalid code"})
+        return jsonify({"message": "User verified successfully"})
     except PyMongoError as e:
         return jsonify({"Error": f"{e}"})
 #endregion
@@ -192,9 +202,9 @@ async def delete_user(email):
 if __name__ == '__main__':
     asyncio.run(debug=True)
 
-async def _save_task(idc, data, id = None):
+def _save_task(idc, data, id = None):
     new_task = Task(title=data['title'], description=data['description'], done=data['done'], end_date=data['end_date'], is_important=data['is_important'], id = id)
-    saved_task = await task_repo.save(new_task, idc, new_task.id)
+    saved_task = task_repo.save(new_task, idc, new_task.id)
 
     if saved_task is None:
         return jsonify({"message": "Failed to save task"})
@@ -207,17 +217,23 @@ async def _save_task(idc, data, id = None):
 
     return jsonify(serialized_task)
 
-async def _save_user(idc, data, email):
-    new_user = User(name=data['name'], email=data['email'], password=data['password'])
-    saved_user = await user_repo.save(new_user, idc, email)
+async def _save_user(idc, data, email, is_new = True):
+    new_user = User(name=data['name'], email=email, password=data['password'])
+    saved_user = user_repo.save(new_user, idc, email)
 
     if saved_user is None:
         return jsonify({"message": "Failed to save user"})
+    if is_new:
+        # Send verification email
+        await email_service.send_verify_email(saved_user.email, saved_user.verify_code)
 
     serialized_user = saved_user.__dict__
 
     # If serialized_user have '_id' cast to str
     if '_id' in serialized_user:
         serialized_user['_id'] = str(serialized_user['_id'])
+    
+    if "verify_code" in serialized_user:
+        del serialized_user["verify_code"]
 
     return jsonify(serialized_user)
