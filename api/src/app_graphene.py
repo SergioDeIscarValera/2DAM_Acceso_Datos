@@ -13,7 +13,7 @@ from src.models.task_type import TaskType
 from src.services.mapper.user_mapper import UserMapperService
 from src.services.mapper.task_mapper import TaskMapperService
 from src.services.email.email_service_smtplib import EmailServiceSmtplib
-import asyncio
+# import asyncio
 
 app = Flask(__name__)
 
@@ -40,8 +40,15 @@ class TaskInput(InputObjectType):
     title = String(required=True)
     description = String(required=True)
     end_date = String(required=True)
-    is_important = Boolean(required=True)
-    is_done = Boolean(required=True)
+    is_important = Boolean(default_value=False)
+    is_done = Boolean(default_value=False)
+
+class TaskInputEdit(InputObjectType):
+    title = String(default_value=None)
+    description = String(default_value=None)
+    end_date = String(default_value=None)
+    is_important = Boolean(default_value=None)
+    is_done = Boolean(default_value=None)
 
 class CreateTask(Mutation):
     class Arguments:
@@ -57,7 +64,7 @@ class CreateTask(Mutation):
         if user.is_verified == False:
             return Exception('User not verified')
         new_task = Task(title=input.title, description=input.description, end_date=input.end_date, is_important=input.is_important, done=input.is_done)
-        result = task_repo.save(new_task, email, email)
+        result = task_repo.save(new_task, email, new_task.id)
         if result is None:
             return Exception('Task not saved')
         return CreateTask(task=TaskMapperService.map_task_to_task_type(result))
@@ -67,10 +74,13 @@ class EditTask(Mutation):
         id = String(required=True)
         email = String(required=True)
         password = String(required=True)
-        input = TaskInput(required=True)
+        input = TaskInputEdit(required=True)
 
     task = Field(lambda: TaskType)
     def mutate(self, info, id, email, password, input):
+        if input.title is None and input.description is None and input.end_date is None and input.is_important is None and input.is_done is None:
+            return Exception('No changes to make')
+
         user = user_repo.find_by_id(email, email)
         if user is None or user.password != password:
             return Exception('Invalid user or password')
@@ -79,12 +89,14 @@ class EditTask(Mutation):
         task = task_repo.find_by_id(id, email)
         if task is None:
             return Exception('Task not found')
-        task.title = input.title
-        task.description = input.description
-        task.end_date = input.end_date
-        task.is_important = input.is_important
-        task.done = input.is_done
-        result = task_repo.save(task, email, email)
+
+        task.title = input.title if input.title is not None else task.title
+        task.description = input.description if input.description is not None else task.description
+        task.end_date = input.end_date if input.end_date is not None else task.end_date
+        task.is_important = input.is_important if input.is_important is not None else task.is_important
+        task.done = input.is_done if input.is_done is not None else task.done
+
+        result = task_repo.save(task, email, task.id)
         if result is None:
             return Exception('Task not saved')
         return EditTask(task=TaskMapperService.map_task_to_task_type(result))
@@ -109,16 +121,23 @@ class DeleteTask(Mutation):
         return DeleteTask(task=TaskMapperService.map_task_to_task_type(task))
 #endregion
 #region Users
+class UserInput(InputObjectType):
+    name = String(required=True)
+    email = String(required=True)
+    password = String(required=True)
+
+class UserInputEdit(InputObjectType):
+    name = String()
+    password = String()
+
 class CreateUser(Mutation):
     class Arguments:
-        name = String(required=True)
-        email = String(required=True)
-        password = String(required=True)
+        input = UserInput(required=True)
 
     user = Field(lambda: UserType)
-    def mutate(self, info, name, email, password):
-        new_user = User(name=name, email=email, password=password)
-        result = user_repo.save(new_user, email, email)
+    def mutate(self, info, input):
+        new_user = User(name=input.name, email=input.email, password=input.password)
+        result = user_repo.save(new_user, input.email, input.email)
         if result is None:
             return Exception('User not saved')
         # await email_service.send_verify_email(result.email, result.verify_code)
@@ -128,16 +147,19 @@ class EditUser(Mutation):
     class Arguments:
         email = String(required=True)
         old_password = String(required=True)
-        name = String()
-        password = String()
+        input = UserInputEdit(required=True)
 
     user = Field(lambda: UserType)
-    def mutate(self, info, email, old_password, name, password):
+    def mutate(self, info, email, old_password, input):
         user = user_repo.find_by_id(email, email)
         if user is None or user.password != old_password:
             return Exception('Invalid user or password')
-        user.name = name
-        user.password = password
+        if input.name is None and input.password is None:
+            return EditUser(user=UserMapperService.map_user_to_user_type(user))
+
+        user.name = input.name if input.name is not None else user.name
+        user.password = input.password if input.password is not None else user.password
+
         result = user_repo.save(user, email, email)
         if result is None:
             return Exception('User not saved')
@@ -185,7 +207,7 @@ class Query(ObjectType):
         if user.is_verified == False:
             return Exception('User not verified')
         tasks = task_repo.find_all(email)
-        return [TaskMapperService.map_task_to_task_type(task) for task in tasks]
+        return [TaskMapperService.map_task_to_task_type(tem) for tem in tasks]
 
     def resolve_task(self, info, id, email, password):
         user = user_repo.find_by_id(email, email)

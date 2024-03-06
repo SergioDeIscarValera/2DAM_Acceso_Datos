@@ -21,6 +21,7 @@ services:
       MARIADB_DATABASE: testdb
     # volumes:
     #   - ./dataMaria:/var/lib/mysql
+    # command: --init-file /docker-entrypoint-initdb.d/init.sql
   api_rest:
     build:
       context: ./api/
