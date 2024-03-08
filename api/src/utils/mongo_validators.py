@@ -1,8 +1,8 @@
 from pymongo import MongoClient
 
 class MongoValidators:
-    def __init__(self):
-        client = MongoClient("mongodb://root:example@mongodb:27017/")
+    def __init__(self, db_user, db_pass):
+        client = MongoClient(f"mongodb://{db_user}:{db_pass}@mongodb:27017/")
         self.db = client.testdb
 
         self.date_regex = "^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}.[0-9]{6}$"

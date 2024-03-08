@@ -6,15 +6,15 @@ from mariadb import mariadb
 from datetime import datetime
 
 class TaskRepositoryMaria(RepositoryABC[Task, str, str]):
-    def __init__(self, table: str):
+    def __init__(self, table: str, db_user: str, db_password: str):
         self.table = table
         print("Connecting to MariaDB...")
         try:
             self.conn = mariadb.connect(
                 host="mariadb",
                 port=3306,
-                user="root",
-                password="example",
+                user=db_user,
+                password=db_password,
                 database="testdb"
             )
             self.cursor = self.conn.cursor()

@@ -19,21 +19,22 @@ app = Flask(__name__)
 
 env = dotenv_values()
 DB_TYPE = env["DB_TYPE"]
-print(f"DB_TYPE: {DB_TYPE}")
+DB_USER = env["DB_USER"]
+DB_PASS = env["DB_PASS"]
 
 # Set up the repositories
-mongo_validators = MongoValidators()
+mongo_validators = MongoValidators(DB_USER, DB_PASS)
 mongo_validators.apply_user_mongo_shema("my_users")
-user_repo = UserRepositoryMongo("my_users")
+user_repo = UserRepositoryMongo("my_users", DB_USER, DB_PASS)
 
 # Set up the email service
 email_service = EmailServiceSmtplib(env)
 
 if DB_TYPE == "mongodb":
-    task_repo = TaskRepositoryMongo("tasks")
+    task_repo = TaskRepositoryMongo("tasks", DB_USER, DB_PASS)
     mongo_validators.apply_task_mongo_shema("tasks")
 elif DB_TYPE == "mariadb":
-    task_repo = TaskRepositoryMaria("tasks")
+    task_repo = TaskRepositoryMaria("tasks", DB_USER, DB_PASS)
 
 #region Tasks
 class TaskInput(InputObjectType):

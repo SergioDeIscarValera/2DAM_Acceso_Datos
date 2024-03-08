@@ -6,10 +6,10 @@ from pymongo import MongoClient
 import datetime
 
 class TaskRepositoryMongo(RepositoryABC[Task, str, str]):
-    def __init__(self, collection: str):
+    def __init__(self, collection: str, db_user: str, db_password: str):
         self.collection = collection
         print("Connecting to MongoDB...")
-        client = MongoClient("mongodb://root:example@mongodb:27017/")
+        client = MongoClient(f"mongodb://{db_user}:{db_password}@mongodb:27017/")
 
         self.db = client.testdb
         self.task_collection = self.db[self.collection]
